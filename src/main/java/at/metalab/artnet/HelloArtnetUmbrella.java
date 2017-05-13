@@ -12,15 +12,12 @@ public class HelloArtnetUmbrella {
 	}
 
 	public void go(String[] args) throws Exception {
-		// Serviervorschlag ...
-		// *alle* Umbrellas in subnet=1
-		// ein "großer" umbrella mit universe=0 (Payload: 5 Bytes * numUmbrellas)
-		// die "einzelnen" umbrellas mit jeweils eigenem universe>0 (Payload: 5 Bytes)
 		final int numUmbrellas = 12;
-		final int artnetSubnet = 1;
+		final int artnetUniverse = 3;
+		final int artnetSubnet = 0;
 		final String ip = "10.20.255.255"; // n.b. broadcast
 		final int resends = 10;
-		
+
 		ArtNet artnet = new ArtNet();
 
 		artnet.start();
@@ -38,7 +35,7 @@ public class HelloArtnetUmbrella {
 		color2 = ArrayUtils.add(color2, (byte) 0); // r
 		color2 = ArrayUtils.add(color2, (byte) 0); // g
 		color2 = ArrayUtils.add(color2, (byte) 0); // b
-		color2 = ArrayUtils.add(color2, (byte) 0); // a
+		color2 = ArrayUtils.add(color2, (byte) 255); // a
 		color2 = ArrayUtils.add(color2, (byte) 0); // w
 
 		// payload for all umbrellas at once
@@ -54,51 +51,32 @@ public class HelloArtnetUmbrella {
 		}
 
 		for (;;) {
+			byte[] colorData1 = fullColor1;
+			byte[] colorData2 = fullColor2;
 			System.out.println("Starting a new cycle through the umbrellas");
-			
-			for (int artnetUniverse = 0; artnetUniverse <= numUmbrellas; artnetUniverse++) {
-				byte[] colorData1 = null;
-				byte[] colorData2 = null;
 
-				if (artnetUniverse == 0) {
-					// this is the virtual universe to which all
-					// umbrellas will respond (although each will
-					// just use a small part of the data)
-					colorData1 = fullColor1;
-					colorData2 = fullColor2;
-				} else {
-					// a single umbrella will respond to this universe
-					// only the 5 bytes of data are needed
-					colorData1 = color1;
-					colorData2 = color2;
+			// prepare the two ArtDmxPackets which will be sent in the loop
+			// below
+			ArtDmxPacket packetColor1 = buildPacket(artnetSubnet, artnetUniverse, colorData1, colorData1.length);
+			ArtDmxPacket packetColor2 = buildPacket(artnetSubnet, artnetUniverse, colorData2, colorData2.length);
+
+			for (int j = 0; j < 3; j++) {
+				Thread.sleep(1000);
+				System.out.println("Sending color1 -> " + artnetSubnet + ":" + artnetUniverse + " (dmxDataLength="
+						+ packetColor1.getDmxData().length + ")");
+				for (int i = 0; i < resends; i++) { // send multiple times
+													// due to
+					// possible packet loss
+					artnet.unicastPacket(packetColor1, ip);
 				}
 
-				// prepare the two ArtDmxPackets which will be sent in the loop
-				// below
-				ArtDmxPacket packetColor1 = buildPacket(artnetSubnet, artnetUniverse, colorData1, colorData1.length);
-				ArtDmxPacket packetColor2 = buildPacket(artnetSubnet, artnetUniverse, colorData2, colorData2.length);
-
-				// 2 full cycles then move on to the next subnet/universe
-				System.out.println("Starting to send data to " + artnetSubnet + ":" + artnetUniverse);
-
-				for (int j = 0; j < 3; j++) {
-					Thread.sleep(1000);
-					System.out.println("Sending color1 -> " + artnetSubnet + ":" + artnetUniverse + " (dmxDataLength="
-							+ packetColor1.getDmxData().length + ")");
-					for (int i = 0; i < resends; i++) { // send multiple times
-														// due to
-						// possible packet loss
-						artnet.unicastPacket(packetColor1, ip);
-					}
-
-					Thread.sleep(1000);
-					System.out.println("Sending color2 -> " + artnetSubnet + ":" + artnetUniverse + " (dmxDataLength="
-							+ packetColor2.getDmxData().length + ")");
-					for (int i = 0; i < resends; i++) { // send multiple times
-														// due to
-						// possible packet loss
-						artnet.unicastPacket(packetColor2, ip);
-					}
+				Thread.sleep(1000);
+				System.out.println("Sending color2 -> " + artnetSubnet + ":" + artnetUniverse + " (dmxDataLength="
+						+ packetColor2.getDmxData().length + ")");
+				for (int i = 0; i < resends; i++) { // send multiple times
+													// due to
+					// possible packet loss
+					artnet.unicastPacket(packetColor2, ip);
 				}
 			}
 		}
